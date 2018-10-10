@@ -18,5 +18,6 @@ typedef struct zx_system_powerctl_arg zx_system_powerctl_arg_t;
 typedef struct zx_profile_info zx_profile_info_t;
 typedef struct zx_smc_parameters zx_smc_parameters_t;
 typedef struct zx_smc_result zx_smc_result_t;
+typedef struct zx_hyp_sys_args zx_hyp_sys_args_t;
 
 __END_CDECLS
