@@ -60,6 +60,12 @@ static dcfg_arm_psci_driver_t psci_driver = {
     .use_hvc = true
 };
 static dcfg_arm_generic_timer_driver_t timer_driver;
+static dcfg_hyp_vtty_driver_t hyp_vtty = {
+    .tx_irq = ~0U,
+    .rx_irq = ~0U,
+    .tx_kcap = ~0U,
+    .rx_kcap = ~0U,
+};
 
 static const zbi_platform_id_t platform_id = {
     .vid = PDEV_VID_OKL4,
@@ -90,6 +96,11 @@ static void append_board_boot_item(zbi_header_t* bootdata)
     if (uart_driver.irq != 0)
         append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_PL011_UART,
                          &uart_driver, sizeof(uart_driver));
+    if (hyp_vtty.tx_kcap != ~0U && hyp_vtty.rx_kcap != ~0U &&
+            hyp_vtty.tx_irq != ~0U && hyp_vtty.rx_irq != ~0U) {
+        append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_HYP_VTTY,
+                         &hyp_vtty, sizeof(hyp_vtty));
+    }
     append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_ARM_PSCI,
                      &psci_driver, sizeof(psci_driver));
     if (timer_driver.irq_virt != 0)
@@ -285,6 +296,34 @@ static void *read_device_tree(void* device_tree)
                 data32 = property;
                 chosen.initrd_start = fdt32_to_cpu(*data32);
             }
+        }
+    }
+
+    /* pipe console */
+    /*
+		serial@8 {
+			compatible = "okl,pipe-tty", "okl,microvisor-pipe", "okl,microvisor-capability";
+			phandle = <0x6>;
+			reg = <0x8 0x9>;
+			label = "serial";
+			interrupts = <0x0 0x0 0x1 0x0 0x1 0x1>;
+		};
+    */
+    offset = fdt_node_offset_by_compatible(device_tree, -1, "okl,pipe-tty");
+    if (offset >= 0) {
+        property = fdt_getprop(device_tree, offset, "reg", &length);
+        if (property && length == sizeof(uint32_t) * 2) {
+            data32 = property;
+            hyp_vtty.tx_kcap = fdt32_to_cpu(data32[0]);
+            hyp_vtty.rx_kcap = fdt32_to_cpu(data32[1]);
+        }
+        property = fdt_getprop(device_tree, offset, "interrupts", &length);
+        if (property && length == sizeof(uint32_t) * 6) {
+            data32 = property;
+            hyp_vtty.tx_irq = fdt32_to_cpu(data32[1])
+                              + (fdt32_to_cpu(data32[0]) ? 16 : 32);
+            hyp_vtty.rx_irq = fdt32_to_cpu(data32[4])
+                              + (fdt32_to_cpu(data32[3]) ? 16 : 32);
         }
     }
 

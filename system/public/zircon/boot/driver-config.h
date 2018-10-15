@@ -18,6 +18,7 @@
 #define KDRV_MT8167_UART        0x5538544D  // 'MT8U'
 #define KDRV_HISILICON_POWER    0x4F505348  // 'HSPO'
 #define KDRV_AMLOGIC_HDCP       0x484C4D41  // 'AMLH'
+#define KDRV_HYP_VTTY           0x56545459  // 'VTTY'
 
 // kernel driver struct that can be used for simple drivers
 // used by KDRV_PL011_UART, KDRV_AMLOGIC_UART and KDRV_NXP_IMX_UART
@@ -86,3 +87,11 @@ typedef struct {
     uint64_t hiu_phys;
     uint64_t hdmitx_phys;
 } dcfg_amlogic_hdcp_driver_t;
+
+// for KDRV_HYP_VTTY
+typedef struct {
+    uint32_t tx_irq;
+    uint32_t rx_irq;
+    uint32_t tx_kcap;
+    uint32_t rx_kcap;
+} dcfg_hyp_vtty_driver_t;

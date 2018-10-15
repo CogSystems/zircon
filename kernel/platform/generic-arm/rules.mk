@@ -35,6 +35,7 @@ MODULE_DEPS += \
 	kernel/dev/uart/mt8167 \
 	kernel/dev/uart/nxp-imx \
 	kernel/dev/uart/pl011 \
+	kernel/dev/uart/hyp-vtty \
 	kernel/dev/hdcp/amlogic_s912 \
 
 include make/module.mk
