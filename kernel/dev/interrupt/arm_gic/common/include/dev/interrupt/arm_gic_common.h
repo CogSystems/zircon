@@ -16,6 +16,7 @@
 
 // GIC Revision
 enum {
+    GICV1 = 1,
     GICV2 = 2,
     GICV3 = 3,
     GICV4 = 4,

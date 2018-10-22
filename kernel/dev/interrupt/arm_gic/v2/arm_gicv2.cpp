@@ -128,7 +128,13 @@ static zx_status_t arm_gic_init() {
     uint32_t pidr2 = GICREG(0, GICD_PIDR2);
     if (pidr2 != 0) {
         uint rev = BITS_SHIFT(pidr2, 7, 4);
+#if defined(OKL4_GUEST)
+        // The virtual gicv2 IDs itself as a v1 because it doesn't
+        // implement all of the v2 features.
+        if (rev != GICV1 && rev != GICV2) {
+#else
         if (rev != GICV2) {
+#endif
             return ZX_ERR_NOT_FOUND;
         }
     } else {
