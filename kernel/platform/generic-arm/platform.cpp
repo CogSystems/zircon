@@ -490,6 +490,11 @@ typedef struct {
 #define NVRAM_MAGIC (0x6f8962d66b28504fULL)
 
 size_t platform_stow_crashlog(void* log, size_t len) {
+#if OKL4_GUEST
+    if (lastlog_nvram.base == 0) {
+        return 0;
+    }
+#endif
     size_t max = lastlog_nvram.length - sizeof(log_hdr_t);
     void* nvram = paddr_to_physmap(lastlog_nvram.base);
     if (nvram == NULL) {
@@ -517,6 +522,11 @@ size_t platform_stow_crashlog(void* log, size_t len) {
 
 size_t platform_recover_crashlog(size_t len, void* cookie,
                                  void (*func)(const void* data, size_t, size_t len, void* cookie)) {
+#if OKL4_GUEST
+    if (lastlog_nvram.base == 0) {
+        return 0;
+    }
+#endif
     size_t max = lastlog_nvram.length - sizeof(log_hdr_t);
     void* nvram = paddr_to_physmap(lastlog_nvram.base);
     if (nvram == NULL) {
