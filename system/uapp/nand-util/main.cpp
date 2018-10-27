@@ -4,6 +4,7 @@
 
 #include <fcntl.h>
 #include <getopt.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -20,7 +21,6 @@
 #include <zircon/nand/c/fidl.h>
 #include <zircon/status.h>
 #include <zircon/syscalls.h>
-#include <zxcpp/new.h>
 
 #include "aml.h"
 

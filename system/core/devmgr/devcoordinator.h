@@ -4,19 +4,18 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <ddk/binding.h>
 #include <ddk/device.h>
 #include <ddk/driver.h>
-#include <zircon/compiler.h>
-#include <zircon/types.h>
-#include <zircon/listnode.h>
-
 #include <fbl/intrusive_double_list.h>
-#include <fbl/new.h>
 #include <fbl/string.h>
 #include <fbl/unique_ptr.h>
+#include <new>
 #include <port/port.h>
+#include <stdint.h>
+#include <zircon/compiler.h>
+#include <zircon/listnode.h>
+#include <zircon/types.h>
 
 namespace devmgr {
 

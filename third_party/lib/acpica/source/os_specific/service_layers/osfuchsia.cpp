@@ -6,10 +6,11 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <new>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <threads.h>
-#include <pthread.h>
 
 #include <hw/inout.h>
 #include <pci/pio.h>
@@ -17,7 +18,6 @@
 #include <zircon/process.h>
 #include <zircon/syscalls.h>
 #include <zircon/thread_annotations.h>
-#include <zxcpp/new.h>
 #include <fbl/alloc_checker.h>
 #include <fbl/auto_lock.h>
 #include <fbl/intrusive_hash_table.h>
@@ -1113,7 +1113,7 @@ static ACPI_STATUS AcpiOsReadWritePciConfiguration(
     zx_status_t st;
 #ifdef ENABLE_USER_PCI
     switch(Width) {
-    case 8u: 
+    case 8u:
         (Write) ? st = pci_pio_write8(bus, dev, func, offset, static_cast<uint8_t>(*Value))
                 : st = pci_pio_read8(bus, dev, func, offset, reinterpret_cast<uint8_t*>(Value));
         break;

@@ -56,7 +56,13 @@
 #include <kernel/mutex.h>
 #include <kernel/stats.h>
 #include <kernel/thread.h>
+#include <lib/ktrace.h>
+#include <lib/pci/pio.h>
+#include <new>
 #include <platform.h>
+#include <pow2.h>
+#include <string.h>
+#include <trace.h>
 #include <vm/vm.h>
 #include <vm/vm_address_region.h>
 #include <vm/vm_aspace.h>
@@ -68,10 +74,6 @@
 #include <lib/zircon-internal/ktrace.h>
 #include <lib/zircon-internal/mtrace.h>
 #include <zircon/thread_annotations.h>
-#include <zxcpp/new.h>
-#include <pow2.h>
-#include <string.h>
-#include <trace.h>
 
 #define LOCAL_TRACE 0
 

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <fcntl.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,7 +14,6 @@
 #include <zircon/device/device.h>
 #include <zircon/device/nand-broker.h>
 #include <zircon/syscalls.h>
-#include <zxcpp/new.h>
 
 #include "parent.h"
 

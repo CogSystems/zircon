@@ -5,12 +5,12 @@
 #include <acpica/acpi.h>
 #include <acpica/actypes.h>
 #include <acpica/acuuid.h>
-#include <ddk/debug.h>
-#include <fbl/new.h>
-#include <fbl/vector.h>
-#include <stdio.h>
-#include <region-alloc/region-alloc.h>
 #include <bits/limits.h>
+#include <ddk/debug.h>
+#include <fbl/vector.h>
+#include <new>
+#include <region-alloc/region-alloc.h>
+#include <stdio.h>
 
 #include "methods.h"
 #include "pci.h"
