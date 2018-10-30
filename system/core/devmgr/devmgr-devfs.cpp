@@ -396,7 +396,8 @@ zx_status_t devfs_publish(Device* parent, Device* dev) {
         char tmp[32];
         const char* name = dev->name;
 
-        if (dev->protocol_id != ZX_PROTOCOL_CONSOLE) {
+        if (dev->protocol_id != ZX_PROTOCOL_CONSOLE &&
+                dev->protocol_id != ZX_PROTOCOL_LINK_SHBUF) {
 
             for (unsigned n = 0; n < 1000; n++) {
                 snprintf(tmp, sizeof(tmp), "%03u", (dir->seqcount++) % 1000);
