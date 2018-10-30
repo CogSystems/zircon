@@ -73,6 +73,9 @@ static const zbi_platform_id_t platform_id = {
     .board_name = "okl4-generic",
 };
 
+static int num_link_shbufs;
+static link_shbuf_info_t link_shbuf_info[32];
+
 static struct {
     const char *cmdline;
     size_t cmdline_length;
@@ -113,6 +116,11 @@ static void append_board_boot_item(zbi_header_t* bootdata)
         append_boot_item(bootdata, ZBI_TYPE_CMDLINE, 0,
                          chosen.cmdline, chosen.cmdline_length);
     }
+
+    // add metadata
+    for (int i = 0; i < num_link_shbufs; i++)
+        append_boot_item(bootdata, LINK_SHBUF_METADATA, i,
+                &link_shbuf_info[i], sizeof(link_shbuf_info[i]));
 
     // add platform ID
     append_boot_item(bootdata, ZBI_TYPE_PLATFORM_ID, 0, &platform_id,
@@ -216,6 +224,23 @@ static void add_memory_range(uint32_t type, uint64_t address,
     mem_config[num_mem_configs].paddr = address;
     mem_config[num_mem_configs].length = size;
     num_mem_configs++;
+}
+
+static void add_link_shbuf(const char *name, uint32_t type, uint64_t address,
+                             uint64_t size, uint32_t virqline, uint32_t virq,
+                             uint32_t rwx)
+{
+    if (num_link_shbufs == countof(link_shbuf_info))
+        fail("too many shared buffers\n");
+    strlcpy(link_shbuf_info[num_link_shbufs].name, name,
+            sizeof(link_shbuf_info[num_link_shbufs].name));
+    link_shbuf_info[num_link_shbufs].type = type;
+    link_shbuf_info[num_link_shbufs].paddr = address;
+    link_shbuf_info[num_link_shbufs].size = size;
+    link_shbuf_info[num_link_shbufs].virqline = virqline;
+    link_shbuf_info[num_link_shbufs].virq = virq;
+    link_shbuf_info[num_link_shbufs].rwx = rwx;
+    num_link_shbufs++;
 }
 
 // Parse the device tree to find our ZBI, kernel command line, and RAM size.
@@ -481,6 +506,103 @@ static void *read_device_tree(void* device_tree)
     }
     if (offset < 0 || !property)
         fail("gic not found in device tree\n");
+
+    /* shared buffers */
+    /*
+        linux-shbuf@10181000 {
+            compatible = "okl,microvisor-link-shbuf", "zircon,block", "okl,microvisor-shared-memory";
+            phandle = <0xe>;
+            reg = <0x0 0x10181000 0x1000>;
+            label = "linux-shbuf";
+            okl,rwx = <0x6>;
+            okl,interrupt-line = <0xa>;
+            interrupts = <0x0 0x3 0x1>;
+            interrupt-parent = <0x3>;
+        };
+
+		interrupt-line@f {
+			compatible = "okl,microvisor-interrupt-line", "okl,microvisor-capability";
+			phandle = <0xa>;
+			reg = <0xf>;
+			label = "linux-shbuf_virqline";
+		};
+    */
+    uint32_t type, virq, virqline, rwx;
+    int virq_offset;
+    const char *label;
+
+    offset = -1;
+    while (1) {
+        offset = fdt_node_offset_by_compatible(device_tree, offset,
+                                               "okl,microvisor-link-shbuf");
+        if (offset < 0)
+            break;
+        if (!fdt_node_check_compatible(device_tree, offset, "zircon,block"))
+            type =  LINK_SHBUF_TYPE_BLOCK;
+        else
+            type =  LINK_SHBUF_TYPE_GENERIC;
+
+        property = fdt_getprop(device_tree, offset, "label", &length);
+        if (!property)
+            continue;
+		label = property;
+
+        property = fdt_getprop(device_tree, offset, "reg", &length);
+        if (!property)
+            continue;
+        parent = fdt_parent_offset(device_tree, offset);
+        address_cells = fdt_address_cells(device_tree, parent);
+        size_cells = fdt_address_cells(device_tree, parent);
+        if (address_cells == 1) {
+            data32 = property;
+            address = fdt32_to_cpu(data32[0]);
+            property = &data32[1];
+        } else {
+            data64 = property;
+            address = fdt64_to_cpu(data64[0]);
+            property = &data64[1];
+        }
+        if (size_cells == 2) {
+            data64 = property;
+            size = fdt64_to_cpu(data64[0]);
+        } else {
+            data32 = property;
+            size = fdt32_to_cpu(data32[0]);
+        }
+
+        property = fdt_getprop(device_tree, offset, "okl,rwx", &length);
+        if (!property)
+            continue;
+        data32 = property;
+		rwx = fdt32_to_cpu(data32[0]);
+
+        property = fdt_getprop(device_tree, offset, "interrupts", &length);
+        if (!property)
+            continue;
+        data32 = property;
+        virq = fdt32_to_cpu(data32[1]) + (fdt32_to_cpu(data32[0]) ? 16 : 32);
+
+        property = fdt_getprop(device_tree, offset, "okl,interrupt-line",
+                               &length);
+        if (!property)
+            continue;
+        data32 = property;
+
+        virq_offset = fdt_node_offset_by_phandle(device_tree,
+                                                 fdt32_to_cpu(data32[0]));
+        if (virq_offset < 0)
+            continue;
+        if (fdt_node_check_compatible(device_tree, virq_offset,
+                                      "okl,microvisor-interrupt-line"))
+            continue;
+        property = fdt_getprop(device_tree, virq_offset, "reg", &length);
+        if (!property)
+            continue;
+        data32 = property;
+        virqline = fdt32_to_cpu(data32[0]);
+
+        add_link_shbuf(label, type, address, size, virqline, virq, rwx);
+    }
 
     // Use the device tree initrd as the ZBI.
     return (void*)chosen.initrd_start;

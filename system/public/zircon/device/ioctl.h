@@ -83,6 +83,7 @@
 #define IOCTL_FAMILY_CLK            0x3F
 // 0x40 unused.
 #define IOCTL_FAMILY_QMI            0x41
+#define IOCTL_FAMILY_LINK_SHBUF     0x42
 
 // IOCTL constructor
 // --K-FFNN

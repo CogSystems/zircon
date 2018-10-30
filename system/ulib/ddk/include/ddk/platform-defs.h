@@ -149,4 +149,9 @@ __BEGIN_CDECLS;
 #define PDEV_VID_SONY               14
 #define PDEV_PID_SONY_IMX227        1
 
+// OKL4
+#define PDEV_VID_OKL4               14
+#define PDEV_PID_OKL4               1
+#define PDEV_DID_LINK_SHBUF         1
+
 __END_CDECLS;

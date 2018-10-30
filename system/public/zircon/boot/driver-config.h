@@ -5,6 +5,7 @@
 #pragma once
 
 #include <zircon/compiler.h>
+#include <zircon/boot/bootdata.h>
 #include <stdint.h>
 
 // BOOTDATA_KERNEL_DRIVER bootdata types
@@ -95,3 +96,27 @@ typedef struct {
     uint32_t tx_kcap;
     uint32_t rx_kcap;
 } dcfg_hyp_vtty_driver_t;
+
+// User-level driver metadata
+#define LINK_SHBUF_METADATA    (0x12e17800 | BOOTDATA_KIND_METADATA)
+
+// for LINK_SHBUF_METADATA
+enum {
+    LINK_SHBUF_TYPE_GENERIC = 0,
+    LINK_SHBUF_TYPE_TEST = 1,
+    LINK_SHBUF_TYPE_BLOCK = 2,
+};
+
+typedef struct {
+    // Device info
+    char name[32];
+    uint32_t type;
+    // Outgoing virq
+    uint32_t virqline;
+    // Incoming virq
+    uint32_t virq;
+    // Shared memory
+    uint64_t paddr;
+    uint64_t size;
+    uint32_t rwx;
+} link_shbuf_info_t;
