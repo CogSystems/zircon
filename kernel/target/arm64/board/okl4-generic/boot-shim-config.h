@@ -62,8 +62,8 @@ static dcfg_arm_psci_driver_t psci_driver = {
 static dcfg_arm_generic_timer_driver_t timer_driver;
 
 static const zbi_platform_id_t platform_id = {
-    .vid = PDEV_VID_GENERIC,
-    .pid = PDEV_PID_GENERIC,
+    .vid = PDEV_VID_OKL4,
+    .pid = PDEV_PID_OKL4,
     .board_name = "okl4-generic",
 };
 

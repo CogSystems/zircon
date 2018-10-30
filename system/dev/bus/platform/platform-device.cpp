@@ -640,10 +640,14 @@ zx_status_t PlatformDevice::Start() {
             }
             if (status != ZX_OK) {
                 zxlogf(WARN, "%s failed to add metadata for new device\n", __func__);
+                break;
             }
         }
 
-        DdkMakeVisible();
+#if OKL4_GUEST
+        if (status == ZX_OK)
+#endif
+            DdkMakeVisible();
     }
 
     return ZX_OK;
