@@ -45,30 +45,86 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <threads.h>
 
-static int dev_index = 0;
+#define IRQ_CLR_SIGNAL  ZX_USER_SIGNAL_0
+
+struct shbuf_data {
+    zx_device_t *dev;
+    zx_handle_t event;
+};
+
+static int event_wait(void* arg) {
+    struct shbuf_data *data = arg;
+    zx_status_t status;
+    zx_device_t *parent = device_get_parent(data->dev);
+
+    for (;;) {
+        status = device_state_wait(parent, DEV_STATE_OOB,
+                ZX_TIME_INFINITE, NULL);
+        if (status != ZX_OK) {
+            break;
+        }
+
+        device_state_set(data->dev, DEV_STATE_OOB);
+
+        status = zx_object_wait_one(data->event, IRQ_CLR_SIGNAL,
+                ZX_TIME_INFINITE, NULL);
+        if (status != ZX_OK) {
+            break;
+        }
+
+        device_state_clr(data->dev, DEV_STATE_OOB);
+        zx_object_signal(data->event, IRQ_CLR_SIGNAL, 0);
+    }
+
+    return 0;
+}
 
 static zx_status_t shbuf_test_read(void* ctx, void* buf,
         size_t count, zx_off_t off, size_t* actual) {
-    zx_device_t *parent = ctx;
+    struct shbuf_data *data = ctx;
+    zx_device_t *parent = device_get_parent(data->dev);
     return device_read(parent, buf, count, off, actual);
 }
 
 static zx_status_t shbuf_test_write(void* ctx, const void* buf,
         size_t count, zx_off_t off, size_t* actual) {
-    zx_device_t *parent = ctx;
+    struct shbuf_data *data = ctx;
+    zx_device_t *parent = device_get_parent(data->dev);
     return device_write(parent, buf, count, off, actual);
 }
 
 static zx_off_t shbuf_test_get_size(void* ctx) {
-    zx_device_t *parent = ctx;
+    struct shbuf_data *data = ctx;
+    zx_device_t *parent = device_get_parent(data->dev);
     return device_get_size(parent);
 }
 
 static zx_status_t shbuf_test_ioctl(void* ctx, uint32_t op, const void* in_buf,
         size_t in_len, void* out_buf, size_t out_len, size_t* out_actual) {
-    zx_device_t *parent = ctx;
-    return device_ioctl(parent, op, in_buf, in_len, out_buf, out_len, out_actual);
+    struct shbuf_data *data = ctx;
+    zx_device_t *parent = device_get_parent(data->dev);
+    zx_status_t status;
+
+    status = device_ioctl(parent, op, in_buf, in_len, out_buf, out_len, out_actual);
+
+    if (status == ZX_OK && op == IOCTL_LINK_SHBUF_IRQ_CLR) {
+        zx_object_signal(data->event, 0, IRQ_CLR_SIGNAL);
+    }
+
+    return ZX_OK;
+}
+
+static void shbuf_test_unbind(void *ctx) {
+    struct shbuf_data *data = ctx;
+    device_remove(data->dev);
+}
+
+static void shbuf_test_release(void *ctx) {
+    struct shbuf_data *data = ctx;
+    zx_handle_close(data->event);
+    free(data);
 }
 
 static zx_protocol_device_t shbuf_test_protocol = {
@@ -77,23 +133,44 @@ static zx_protocol_device_t shbuf_test_protocol = {
     .write = shbuf_test_write,
     .get_size = shbuf_test_get_size,
     .ioctl = shbuf_test_ioctl,
+    .unbind = shbuf_test_unbind,
+    .release = shbuf_test_release,
 };
 
 static zx_status_t shbuf_test_bind(void* ctx, zx_device_t* parent) {
-    char devname[32];
-    zx_device_t *shbuf_dev;
+    zx_status_t status;
+    thrd_t thrd;
+    struct shbuf_data *data = calloc(1, sizeof(struct shbuf_data));
 
-    sprintf(devname, "shbuf-test%d", dev_index);
+    if (data == NULL) {
+        return ZX_ERR_NO_MEMORY;
+    }
+
+    status = zx_event_create(0, &data->event);
+    if (status != ZX_OK) {
+        return status;
+    }
 
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
-        .name = devname,
-        .ctx = parent,
+        .name = "shbuf-test",
+        .ctx = data,
         .proto_id = ZX_PROTOCOL_SHBUF_TEST,
         .ops = &shbuf_test_protocol,
     };
 
-    return device_add(parent, &args, &shbuf_dev);
+    status = device_add(parent, &args, &data->dev);
+    if (status != ZX_OK) {
+        zx_handle_close(data->event);
+    }
+
+    int ret = thrd_create(&thrd, event_wait, data);
+    if (ret != thrd_success) {
+        device_remove(data->dev);
+        return ZX_ERR_NO_MEMORY;
+    }
+
+    return status;
 }
 
 static zx_driver_ops_t shbuf_test_driver_ops = {
