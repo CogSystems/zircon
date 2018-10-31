@@ -97,7 +97,15 @@ static inline fdt32_t cpu_to_fdt32(uint32_t x)
 
 static inline uint64_t fdt64_to_cpu(fdt64_t x)
 {
-	return (__force uint64_t)CPU_TO_FDT64(x);
+	/*
+	 * 64-bit values are only guaranteed to be 32-bit aligned in the
+	 * device tree, but both gcc and clang will assume 64-bit alignment
+	 * and do a single 64-bit load, which may cause an alignment
+	 * exception. Using fdt32_to_cpu() forces two 32-bit loads.
+	 */
+	fdt32_t *y = (void *)(uintptr_t)&x;
+	return ((uint64_t)fdt32_to_cpu(y[0]) << 32) | \
+			(uint64_t)fdt32_to_cpu(y[1]);
 }
 static inline fdt64_t cpu_to_fdt64(uint64_t x)
 {
