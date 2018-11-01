@@ -100,5 +100,6 @@ DDK_PROTOCOL_DEF(GPU,            'pGPU', "gpu", 0)
 DDK_PROTOCOL_DEF(RTC,            'pRTC', "rtc", 0)
 DDK_PROTOCOL_DEF(TEE,            'pTEE', "tee", 0)
 DDK_PROTOCOL_DEF(LINK_SHBUF,     'pSHB', "link-shbuf", 0)
+DDK_PROTOCOL_DEF(SHBUF_TEST,     'pSBT', "shbuf-test", 0)
 #undef DDK_PROTOCOL_DEF
 #endif

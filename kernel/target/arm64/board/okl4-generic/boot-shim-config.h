@@ -539,6 +539,8 @@ static void *read_device_tree(void* device_tree)
             break;
         if (!fdt_node_check_compatible(device_tree, offset, "zircon,block"))
             type =  LINK_SHBUF_TYPE_BLOCK;
+        else if (!fdt_node_check_compatible(device_tree, offset, "zircon,test"))
+            type =  LINK_SHBUF_TYPE_TEST;
         else
             type =  LINK_SHBUF_TYPE_GENERIC;
 
