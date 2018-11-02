@@ -143,6 +143,11 @@ __EXPORT void device_state_clr_set(zx_device_t* dev, zx_signals_t clearflag, zx_
     zx_object_signal(dev->event, clearflag, setflag);
 }
 
+__EXPORT zx_status_t device_state_wait(zx_device_t* dev, zx_signals_t stateflag,
+                                       zx_time_t deadline, zx_signals_t *observed) {
+    return zx_object_wait_one(dev->event, stateflag, deadline, observed);
+}
+
 
 __EXPORT zx_off_t device_get_size(zx_device_t* dev) {
     return dev->ops->get_size(dev->ctx);

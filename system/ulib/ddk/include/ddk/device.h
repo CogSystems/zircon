@@ -292,4 +292,7 @@ static inline void device_state_clr(zx_device_t* dev, zx_signals_t stateflag) {
     device_state_clr_set(dev, stateflag, 0);
 }
 
+zx_status_t device_state_wait(zx_device_t* dev, zx_signals_t stateflag,
+                              zx_time_t deadline, zx_signals_t *observed);
+
 __END_CDECLS;
