@@ -62,8 +62,11 @@ int fdt_address_cells(const void *fdt, int nodeoffset)
 	int len;
 
 	ac = fdt_getprop(fdt, nodeoffset, "#address-cells", &len);
-	if (!ac)
-		return 2;
+	if (!ac) {
+		if (len == -FDT_ERR_NOTFOUND)
+			return 2;
+		return len;
+	}
 
 	if (len != sizeof(*ac))
 		return -FDT_ERR_BADNCELLS;
@@ -82,8 +85,11 @@ int fdt_size_cells(const void *fdt, int nodeoffset)
 	int len;
 
 	sc = fdt_getprop(fdt, nodeoffset, "#size-cells", &len);
-	if (!sc)
-		return 2;
+	if (!sc) {
+		if (len == -FDT_ERR_NOTFOUND)
+			return 1;
+		return len;
+	}
 
 	if (len != sizeof(*sc))
 		return -FDT_ERR_BADNCELLS;
