@@ -35,97 +35,164 @@
 #include <lib/user_copy/user_ptr.h>
 #include <object/resource.h>
 #include <zircon/syscalls/hyp_sys.h>
+#include <vm/vm.h>
 
 #if ARCH_ARM64
 
-#define STR(x) #x
+#include <microvisor/microvisor.h>
 
-#define DO_HYP_SYSCALL(syscall_num, args) \
-    __asm__ __volatile__( \
-        "ldp x0, x1, [%0] \n\t" \
-        "ldp x2, x3, [%0, 16] \n\t" \
-        "ldp x4, x5, [%0, 32] \n\t" \
-        "ldp x6, x7, [%0, 48] \n\t" \
-        "hvc " STR(syscall_num) "\n\t" \
-        "stp x0, x1, [%0] \n\t" \
-        "stp x2, x3, [%0, 16] \n\t" \
-        "stp x4, x5, [%0, 32] \n\t" \
-        "stp x6, x7, [%0, 48] \n\t" \
-        : \
-        : "r" (&args) \
-        : "x0", "x1", "x2", "x3", "x4", \
-          "x5", "x6", "x7", "memory" \
-    )
-
-static bool is_user_buffer(uint64_t addr, uint64_t size) {
-    // Overflow check
-    if ((addr + size) < addr) {
-        return false;
-    }
-
-    // Ensure buffer lies in user address space
-    if ((addr < USER_ASPACE_BASE) ||
-            ((addr + size) > (USER_ASPACE_BASE + USER_ASPACE_SIZE))) {
-        return false;
-    }
-
-    return true;
-}
-
-#endif // ARCH_ARM64
-
-zx_status_t sys_hyp_syscall(zx_handle_t handle,
-                            uint16_t syscall_num,
-                            user_inout_ptr<zx_hyp_sys_args_t> user_args) {
-#if ARCH_ARM64
+zx_status_t sys_hyp_virq_get_payload(zx_handle_t rsrc, uint32_t virq,
+                                     user_out_ptr<uint64_t> user_payload) {
     zx_status_t status;
-    zx_hyp_sys_args_t args;
+    struct _okl4_sys_interrupt_get_payload_return ret;
 
-    // TODO add VIRT resource
-    status = validate_resource(handle, ZX_RSRC_KIND_ROOT);
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
     if (status != ZX_OK) {
         return status;
     }
 
-    status = user_args.copy_from_user(&args);
-    if (status != ZX_OK) {
-        return status;
+    ret = _okl4_sys_interrupt_get_payload(virq);
+    if (ret.error != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
     }
 
-    switch (syscall_num) {
-    case HYP_SYSCALL_INTERRUPT_GET_PAYLOAD:
-        DO_HYP_SYSCALL(HYP_SYSCALL_INTERRUPT_GET_PAYLOAD, args);
-        break;
-    case HYP_SYSCALL_PIPE_CONTROL:
-        DO_HYP_SYSCALL(HYP_SYSCALL_PIPE_CONTROL, args);
-        break;
-    case HYP_SYSCALL_PIPE_RECV:
-        if (!is_user_buffer(args.x2, args.x1)) {
-            return ZX_ERR_INVALID_ARGS;
-        }
-        DO_HYP_SYSCALL(HYP_SYSCALL_PIPE_RECV, args);
-        break;
-    case HYP_SYSCALL_PIPE_SEND:
-        if (!is_user_buffer(args.x2, args.x1)) {
-            return ZX_ERR_INVALID_ARGS;
-        }
-        DO_HYP_SYSCALL(HYP_SYSCALL_PIPE_SEND, args);
-        break;
-    case HYP_SYSCALL_VINTERRUPT_CLEAR_AND_RAISE:
-        DO_HYP_SYSCALL(HYP_SYSCALL_VINTERRUPT_CLEAR_AND_RAISE, args);
-        break;
-    case HYP_SYSCALL_VINTERRUPT_MODIFY:
-        DO_HYP_SYSCALL(HYP_SYSCALL_VINTERRUPT_MODIFY, args);
-        break;
-    case HYP_SYSCALL_VINTERRUPT_RAISE:
-        DO_HYP_SYSCALL(HYP_SYSCALL_VINTERRUPT_RAISE, args);
-        break;
-    default:
-        return ZX_ERR_NOT_SUPPORTED;
-    }
-
-    return user_args.copy_to_user(args);
-#else
-    return ZX_ERR_NOT_SUPPORTED;
-#endif // ARCH_ARM64
+    return user_payload.copy_to_user(ret.payload);
 }
+
+zx_status_t sys_hyp_virq_raise(zx_handle_t rsrc, uint32_t virqline,
+                               uint64_t payload)
+{
+    zx_status_t status;
+    okl4_error_t err;
+
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    err = _okl4_sys_vinterrupt_raise(virqline, payload);
+    if (err != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    return ZX_OK;
+}
+
+zx_status_t sys_hyp_pipe_control(zx_handle_t rsrc, uint32_t pipe, uint8_t op) {
+    zx_status_t status;
+    okl4_error_t err;
+    okl4_pipe_control_t control = 0;
+
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    okl4_pipe_control_setdoop(&control, true);
+
+    switch (op) {
+        case ZX_HYP_PIPE_RESET:
+            okl4_pipe_control_setoperation(&control,
+                    OKL4_PIPE_CONTROL_OP_RESET);
+            break;
+        case ZX_HYP_PIPE_RX_READY:
+            okl4_pipe_control_setoperation(&control,
+                    OKL4_PIPE_CONTROL_OP_SET_RX_READY);
+            break;
+        case ZX_HYP_PIPE_TX_READY:
+            okl4_pipe_control_setoperation(&control,
+                    OKL4_PIPE_CONTROL_OP_SET_TX_READY);
+            break;
+        default:
+            return ZX_ERR_INVALID_ARGS;
+    }
+
+    err = _okl4_sys_pipe_control(pipe, control);
+    if (err != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    return ZX_OK;
+}
+
+zx_status_t sys_hyp_pipe_send(zx_handle_t rsrc, uint32_t pipe,
+                              user_in_ptr<const void> user_buf, size_t len) {
+    zx_status_t status;
+    const uint8_t *buf = static_cast<const uint8_t *>(user_buf.get());
+    okl4_error_t err;
+
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    if ((len % sizeof(uint32_t)) != 0) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    if (!is_user_address_range((vaddr_t)buf, len)) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    err = _okl4_sys_pipe_send(pipe, len, buf);
+    if (err != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    return ZX_OK;
+}
+
+zx_status_t sys_hyp_pipe_recv(zx_handle_t rsrc, uint32_t pipe,
+                              user_out_ptr<void> user_buf, size_t len,
+                              user_out_ptr<size_t> ret_size) {
+    zx_status_t status;
+    uint8_t *buf = static_cast<uint8_t *>(user_buf.get());
+    struct _okl4_sys_pipe_recv_return ret;
+
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    if ((len % sizeof(uint32_t)) != 0) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    if (!is_user_address_range((vaddr_t)buf, len)) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    ret = _okl4_sys_pipe_recv(pipe, len, buf);
+    if (ret.error != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    return ret_size.copy_to_user(ret.size);
+}
+
+#else
+
+zx_status_t sys_hyp_virq_get_payload(zx_handle_t rsrc, uint32_t virq,
+                                     user_out_ptr<uint64_t> user_payload) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t sys_hyp_virq_raise(zx_handle_t rsrc, uint32_t virqline,
+                               uint64_t payload) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t sys_hyp_pipe_control(zx_handle_t rsrc, uint32_t pipe, uint8_t op) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t sys_hyp_pipe_send(zx_handle_t rsrc, uint32_t pipe,
+                              user_in_ptr<const void> user_buf, uint32_t len) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t sys_hyp_pipe_recv(zx_handle_t rsrc, uint32_t pipe,
+                              user_out_ptr<void> user_buf, uint32_t len) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+#endif // ARCH_ARM64

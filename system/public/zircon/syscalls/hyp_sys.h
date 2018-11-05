@@ -36,23 +36,9 @@
 
 __BEGIN_CDECLS
 
-#define HYP_SYSCALL_INTERRUPT_GET_PAYLOAD 5132
-#define HYP_SYSCALL_PIPE_CONTROL 5146
-#define HYP_SYSCALL_PIPE_RECV 5147
-#define HYP_SYSCALL_PIPE_SEND 5148
-#define HYP_SYSCALL_VINTERRUPT_CLEAR_AND_RAISE 5194
-#define HYP_SYSCALL_VINTERRUPT_MODIFY 5195
-#define HYP_SYSCALL_VINTERRUPT_RAISE 5196
-
-typedef struct zx_hyp_sys_args {
-    uint64_t x0;
-    uint64_t x1;
-    uint64_t x2;
-    uint64_t x3;
-    uint64_t x4;
-    uint64_t x5;
-    uint64_t x6;
-    uint64_t x7;
-} zx_hyp_sys_args_t;
+// zx_hyp_pipe_control op codes
+#define ZX_HYP_PIPE_RESET       0
+#define ZX_HYP_PIPE_RX_READY    1
+#define ZX_HYP_PIPE_TX_READY    2
 
 __END_CDECLS

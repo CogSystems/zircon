@@ -754,10 +754,27 @@ syscall system_powerctl
    (resource: zx_handle_t, cmd: uint32_t, arg: zx_system_powerctl_arg_t[1] IN)
    returns (zx_status_t);
 
-# Syscall for HYP
+# Hyp Objects
 
-syscall hyp_syscall
-    (handle: zx_handle_t, syscall_num: uint16_t, args: zx_hyp_sys_args_t[1] INOUT)
+syscall hyp_virq_get_payload
+    (rsrc: zx_handle_t, virq: uint32_t, payload: uint64_t[1] OUT)
+    returns (zx_status_t);
+
+syscall hyp_virq_raise
+    (rsrc: zx_handle_t, virqline: uint32_t, payload: uint64_t)
+    returns (zx_status_t);
+
+syscall hyp_pipe_control
+    (rsrc: zx_handle_t, pipe: uint32_t, op: uint8_t)
+    returns (zx_status_t);
+
+syscall hyp_pipe_send
+    (rsrc: zx_handle_t, pipe: uint32_t, buf: any[len] IN, len: size_t)
+    returns (zx_status_t);
+
+syscall hyp_pipe_recv
+    (rsrc: zx_handle_t, pipe: uint32_t, buf: any[len] OUT, len: size_t,
+        ret_size: size_t[1] OUT)
     returns (zx_status_t);
 
 # Test syscalls (keep at the end)

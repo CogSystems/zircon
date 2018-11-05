@@ -72,7 +72,6 @@ struct vs_shbuf_data {
 static int virq_handler(void* arg) {
     struct vs_shbuf_data *shbuf = arg;
     zx_status_t status;
-    zx_hyp_sys_args_t args = {0};
     uint64_t payload;
 
     for (;;) {
@@ -85,15 +84,11 @@ static int virq_handler(void* arg) {
             return status;
         }
 
-        args.x0 = shbuf->virq;
-        status = zx_hyp_syscall(shbuf->rsrc,
-                HYP_SYSCALL_INTERRUPT_GET_PAYLOAD, &args);
-        if ((status != ZX_OK) || (args.x0 != 0)) {
-            printf("vs-shbuf: hyp syscall (get payload) failed: %d, %lu\n",
-                    status, args.x0);
+        status = zx_hyp_virq_get_payload(shbuf->rsrc, shbuf->virq, &payload);
+        if (status != ZX_OK) {
+            printf("vs-shbuf: virq get payload failed: %d\n", status);
             return status;
         }
-        payload = args.x1;
 
         (void)atomic_fetch_or(&shbuf->virq_payload, payload);
 
@@ -168,7 +163,6 @@ static zx_status_t vs_shbuf_ioctl_irq_tx(struct vs_shbuf_data *shbuf,
         const void* in_buf, size_t in_len, size_t* out_actual) {
     uint64_t payload;
     zx_status_t status;
-    zx_hyp_sys_args_t args = {0};
 
     if (shbuf->virqline == 0) {
         /* No outgoing virq */
@@ -181,13 +175,10 @@ static zx_status_t vs_shbuf_ioctl_irq_tx(struct vs_shbuf_data *shbuf,
     }
     payload = *(uint64_t *)in_buf;
 
-    args.x0 = shbuf->virqline;
-    args.x1 = payload;
-    status = zx_hyp_syscall(shbuf->rsrc, HYP_SYSCALL_VINTERRUPT_RAISE, &args);
-    if ((status != ZX_OK) || (args.x0 != 0)) {
-        printf("vs-shbuf: hyp syscall (virq raise) failed: %d, %lu\n",
-                status, args.x0);
-        return ZX_ERR_INVALID_ARGS;
+    status = zx_hyp_virq_raise(shbuf->rsrc, shbuf->virqline, payload);
+    if (status != ZX_OK) {
+        printf("vs-shbuf: virq raise failed: %d\n", status);
+        return status;
     }
 
     *out_actual = 0;
