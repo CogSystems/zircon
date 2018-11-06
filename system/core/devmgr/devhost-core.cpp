@@ -548,11 +548,14 @@ static void devhost_unbind_children(zx_device_t* dev) REQ_DM_LOCK {
     printf("devhost_unbind_children: %p(%s)\n", dev, dev->name);
 #endif
     enum_lock_acquire();
+    // If a child device is waiting on the parent, cancel the wait.
+    zx_object_signal(dev->event, 0, DEVICE_SIGNAL_CANCEL);
     for (auto& child : dev->children) {
         if (!(child.flags & DEV_FLAG_DEAD)) {
             devhost_device_unbind(&child);
         }
     }
+    zx_object_signal(dev->event, DEVICE_SIGNAL_CANCEL, 0);
     enum_lock_release();
 }
 

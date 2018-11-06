@@ -148,6 +148,8 @@ struct zx_device {
 #define DEV_FLAG_UNBOUND        0x00000400  // informed that it should self-delete asap
 #define DEV_FLAG_WANTS_REBIND   0x00000800  // when last child goes, rebind this device
 
+#define DEVICE_SIGNAL_CANCEL    ZX_EVENT_SIGNALED
+
 zx_status_t device_bind(zx_device_t* dev, const char* drv_libname);
 zx_status_t device_unbind(zx_device_t* dev);
 zx_status_t device_open_at(zx_device_t* dev, zx_device_t** out, const char* path, uint32_t flags);

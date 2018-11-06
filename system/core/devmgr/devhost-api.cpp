@@ -145,7 +145,21 @@ __EXPORT void device_state_clr_set(zx_device_t* dev, zx_signals_t clearflag, zx_
 
 __EXPORT zx_status_t device_state_wait(zx_device_t* dev, zx_signals_t stateflag,
                                        zx_time_t deadline, zx_signals_t *observed) {
-    return zx_object_wait_one(dev->event, stateflag, deadline, observed);
+    zx_status_t status;
+    zx_signals_t ret;
+
+    stateflag |= DEVICE_SIGNAL_CANCEL;
+
+    status = zx_object_wait_one(dev->event, stateflag, deadline, &ret);
+    if ((status == ZX_OK) && (ret & DEVICE_SIGNAL_CANCEL)) {
+        status = ZX_ERR_CANCELED;
+    }
+
+    if (observed != NULL) {
+        *observed = ret & ~DEVICE_SIGNAL_CANCEL;
+    }
+
+    return status;
 }
 
 
