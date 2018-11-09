@@ -154,5 +154,6 @@ __BEGIN_CDECLS;
 #define PDEV_PID_OKL4               1
 #define PDEV_DID_LINK_SHBUF         1
 #define PDEV_DID_VS_SHBUF           2
+#define PDEV_DID_HYP_PIPE           3
 
 __END_CDECLS;

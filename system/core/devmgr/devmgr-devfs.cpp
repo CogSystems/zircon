@@ -398,7 +398,8 @@ zx_status_t devfs_publish(Device* parent, Device* dev) {
 
         if (dev->protocol_id != ZX_PROTOCOL_CONSOLE &&
                 dev->protocol_id != ZX_PROTOCOL_LINK_SHBUF &&
-                dev->protocol_id != ZX_PROTOCOL_VS_SHBUF) {
+                dev->protocol_id != ZX_PROTOCOL_VS_SHBUF &&
+                dev->protocol_id != ZX_PROTOCOL_HYP_PIPE) {
 
             for (unsigned n = 0; n < 1000; n++) {
                 snprintf(tmp, sizeof(tmp), "%03u", (dir->seqcount++) % 1000);
