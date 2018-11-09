@@ -93,6 +93,9 @@ static link_shbuf_info_t link_shbuf_info[32];
 static int num_vs_shbufs;
 static vs_shbuf_info_t vs_shbuf_info[32];
 
+static int num_link_pipes;
+static link_pipe_info_t link_pipe_info[32];
+
 static struct {
     const char *cmdline;
     size_t cmdline_length;
@@ -138,6 +141,9 @@ static void append_board_boot_item(zbi_header_t* bootdata)
     for (int i = 0; i < num_link_shbufs; i++)
         append_boot_item(bootdata, LINK_SHBUF_METADATA, i,
                 &link_shbuf_info[i], sizeof(link_shbuf_info[i]));
+    for (int i = 0; i < num_link_pipes; i++)
+        append_boot_item(bootdata, LINK_PIPE_METADATA, i,
+                &link_pipe_info[i], sizeof(link_pipe_info[i]));
     for (int i = 0; i < num_vs_shbufs; i++)
         append_boot_item(bootdata, VS_SHBUF_METADATA, i,
                 &vs_shbuf_info[i], sizeof(vs_shbuf_info[i]));
@@ -269,6 +275,20 @@ static void add_vs_shbuf(vs_shbuf_info_t *info)
         fail("too many shared buffers\n");
     memcpy(&vs_shbuf_info[num_vs_shbufs], info, sizeof(vs_shbuf_info[0]));
     num_vs_shbufs++;
+}
+
+static void add_link_pipe(const char *name, uint32_t tx_irq, uint32_t rx_irq,
+                          uint32_t tx_kcap, uint32_t rx_kcap)
+{
+    if (num_link_pipes == countof(link_pipe_info))
+        fail("too many pipes\n");
+    strlcpy(link_pipe_info[num_link_pipes].name, name,
+            sizeof(link_pipe_info[num_link_pipes].name));
+    link_pipe_info[num_link_pipes].tx_irq = tx_irq;
+    link_pipe_info[num_link_pipes].rx_irq = rx_irq;
+    link_pipe_info[num_link_pipes].tx_kcap = tx_kcap;
+    link_pipe_info[num_link_pipes].rx_kcap = rx_kcap;
+    num_link_pipes++;
 }
 
 // Parse the device tree to find our ZBI, kernel command line, and RAM size.
@@ -789,6 +809,47 @@ static void *read_device_tree(void* device_tree)
             add_vs_shbuf(&info);
             break;
         }
+    }
+
+    /* pipes */
+    /*
+        aliases {
+            pipe0 = "/hypervisor/pipe0@18";
+        };
+
+		pipe0@18 {
+			compatible = "okl,pipe", "okl,microvisor-pipe", "okl,microvisor-capability";
+			phandle = <0xb>;
+			reg = <0x18 0x19>;
+			label = "pipe0";
+			interrupts = <0x0 0xa 0x1 0x0 0xb 0x1>;
+		};
+    */
+    fdt_for_each_compatible_node(offset, device_tree, "okl,pipe") {
+        uint32_t tx_irq, rx_irq, tx_kcap, rx_kcap;
+
+        property = fdt_getprop(device_tree, offset, "label", &length);
+        if (!property)
+            continue;
+		label = property;
+
+        property = fdt_getprop(device_tree, offset, "reg", &length);
+        if (!property || length != sizeof(uint32_t) * 2)
+            continue;
+        data32 = property;
+        tx_kcap = fdt32_to_cpu(data32[0]);
+        rx_kcap = fdt32_to_cpu(data32[1]);
+
+        property = fdt_getprop(device_tree, offset, "interrupts", &length);
+        if (!property || length != sizeof(uint32_t) * 6)
+            continue;
+        data32 = property;
+        tx_irq = fdt32_to_cpu(data32[1])
+                 + (fdt32_to_cpu(data32[0]) ? 16 : 32);
+        rx_irq = fdt32_to_cpu(data32[4])
+                 + (fdt32_to_cpu(data32[3]) ? 16 : 32);
+
+        add_link_pipe(label, tx_irq, rx_irq, tx_kcap, rx_kcap);
     }
 
     // Use the device tree initrd as the ZBI.

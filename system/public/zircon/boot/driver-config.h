@@ -145,3 +145,13 @@ typedef struct {
     uint32_t message_size;
     bool is_client;
 } vs_shbuf_info_t;
+
+#define LINK_PIPE_METADATA    (0x12e17A00 | BOOTDATA_KIND_METADATA)
+
+typedef struct {
+    char name[32];
+    uint32_t tx_irq;
+    uint32_t rx_irq;
+    uint32_t tx_kcap;
+    uint32_t rx_kcap;
+} link_pipe_info_t;
