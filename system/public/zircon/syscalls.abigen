@@ -777,6 +777,10 @@ syscall hyp_pipe_recv
         ret_size: size_t[1] OUT)
     returns (zx_status_t);
 
+syscall hyp_pipe_get_state
+    (rsrc: zx_handle_t, pipe_irq: uint32_t, state: uint32_t[1] OUT)
+    returns (zx_status_t);
+
 # Test syscalls (keep at the end)
 
 syscall syscall_test_0() returns (zx_status_t);

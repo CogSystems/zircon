@@ -37,8 +37,15 @@
 __BEGIN_CDECLS
 
 // zx_hyp_pipe_control op codes
-#define ZX_HYP_PIPE_RESET       0
-#define ZX_HYP_PIPE_RX_READY    1
-#define ZX_HYP_PIPE_TX_READY    2
+#define ZX_HYP_PIPE_CTL_RESET       0
+#define ZX_HYP_PIPE_CTL_RX_READY    1
+#define ZX_HYP_PIPE_CTL_TX_READY    2
+
+// zx_hyp_pipe_get_state bits
+#define ZX_HYP_PIPE_STATE_RESET     (1U << 0)
+#define ZX_HYP_PIPE_STATE_TX_READY  (1U << 1)
+#define ZX_HYP_PIPE_STATE_RX_READY  (1U << 2)
+#define ZX_HYP_PIPE_STATE_TX_AVAIL  (1U << 3)
+#define ZX_HYP_PIPE_STATE_RX_AVAIL  (1U << 4)
 
 __END_CDECLS

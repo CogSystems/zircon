@@ -91,15 +91,15 @@ zx_status_t sys_hyp_pipe_control(zx_handle_t rsrc, uint32_t pipe, uint8_t op) {
     okl4_pipe_control_setdoop(&control, true);
 
     switch (op) {
-        case ZX_HYP_PIPE_RESET:
+        case ZX_HYP_PIPE_CTL_RESET:
             okl4_pipe_control_setoperation(&control,
                     OKL4_PIPE_CONTROL_OP_RESET);
             break;
-        case ZX_HYP_PIPE_RX_READY:
+        case ZX_HYP_PIPE_CTL_RX_READY:
             okl4_pipe_control_setoperation(&control,
                     OKL4_PIPE_CONTROL_OP_SET_RX_READY);
             break;
-        case ZX_HYP_PIPE_TX_READY:
+        case ZX_HYP_PIPE_CTL_TX_READY:
             okl4_pipe_control_setoperation(&control,
                     OKL4_PIPE_CONTROL_OP_SET_TX_READY);
             break;
@@ -135,7 +135,9 @@ zx_status_t sys_hyp_pipe_send(zx_handle_t rsrc, uint32_t pipe,
     }
 
     err = _okl4_sys_pipe_send(pipe, len, buf);
-    if (err != OKL4_OK) {
+    if (err == OKL4_ERROR_PIPE_FULL || err == OKL4_ERROR_PIPE_NOT_READY) {
+        return ZX_ERR_SHOULD_WAIT;
+    } else if (err != OKL4_OK) {
         return ZX_ERR_INVALID_ARGS;
     }
 
@@ -163,11 +165,51 @@ zx_status_t sys_hyp_pipe_recv(zx_handle_t rsrc, uint32_t pipe,
     }
 
     ret = _okl4_sys_pipe_recv(pipe, len, buf);
+    if (ret.error == OKL4_ERROR_PIPE_EMPTY ||
+            ret.error == OKL4_ERROR_PIPE_NOT_READY) {
+        return ZX_ERR_SHOULD_WAIT;
+    } else if (ret.error != OKL4_OK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    if (ret_size) {
+        return ret_size.copy_to_user(ret.size);
+    } else {
+        return ZX_OK;
+    }
+}
+
+zx_status_t sys_hyp_pipe_get_state(zx_handle_t rsrc, uint32_t pipe_irq,
+                                   user_out_ptr<uint32_t> user_state) {
+    zx_status_t status;
+    struct _okl4_sys_interrupt_get_payload_return ret;
+    okl4_pipe_state_t payload;
+    uint32_t state = 0;
+
+    status = validate_resource(rsrc, ZX_RSRC_KIND_ROOT);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    ret = _okl4_sys_interrupt_get_payload(pipe_irq);
     if (ret.error != OKL4_OK) {
         return ZX_ERR_INVALID_ARGS;
     }
 
-    return ret_size.copy_to_user(ret.size);
+    payload = static_cast<okl4_pipe_state_t>(ret.payload);
+
+    if (okl4_pipe_state_getreset(&payload))
+        state |= ZX_HYP_PIPE_STATE_RESET;
+    if (okl4_pipe_state_gettxready(&payload))
+        state |= ZX_HYP_PIPE_STATE_TX_READY;
+    if (okl4_pipe_state_getrxready(&payload))
+        state |= ZX_HYP_PIPE_STATE_RX_READY;
+    if (okl4_pipe_state_gettxavailable(&payload))
+        state |= ZX_HYP_PIPE_STATE_TX_AVAIL;
+    if (okl4_pipe_state_getrxavailable(&payload))
+        state |= ZX_HYP_PIPE_STATE_RX_AVAIL;
+
+    return user_state.copy_to_user(state);
 }
 
 #else
@@ -193,6 +235,11 @@ zx_status_t sys_hyp_pipe_send(zx_handle_t rsrc, uint32_t pipe,
 
 zx_status_t sys_hyp_pipe_recv(zx_handle_t rsrc, uint32_t pipe,
                               user_out_ptr<void> user_buf, uint32_t len) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t sys_hyp_pipe_get_state(zx_handle_t rsrc, uint32_t pipe_irq,
+                                   user_out_ptr<uint32_t> user_state) {
     return ZX_ERR_NOT_SUPPORTED;
 }
 #endif // ARCH_ARM64
