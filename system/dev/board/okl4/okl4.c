@@ -48,6 +48,7 @@
 #include <zircon/boot/driver-config.h>
 
 #define MAX_LINK_SHBUF  8
+#define MAX_VS_SHBUF  8
 
 static zx_protocol_device_t okl4_device_protocol = {
     .version = DEVICE_OPS_VERSION,
@@ -88,6 +89,27 @@ static zx_status_t okl4_bind(void* ctx, zx_device_t* parent) {
             .vid = PDEV_VID_OKL4,
             .pid = PDEV_PID_OKL4,
             .did = PDEV_DID_LINK_SHBUF,
+            .boot_metadata_list = &metadata,
+            .boot_metadata_count = 1,
+        };
+        status = pbus_device_add(&pbus, &shbuf_dev);
+        if (status != ZX_OK) {
+            break;
+        }
+    }
+
+    // Attempt to add vs shbuf devices
+    // Note: if this is slow, spin off a thread
+    for (uint32_t i = 0; i < MAX_VS_SHBUF; i++) {
+        pbus_boot_metadata_t metadata = {
+            .zbi_type = VS_SHBUF_METADATA,
+            .zbi_extra = i,
+        };
+        pbus_dev_t shbuf_dev = {
+            .name = "vs-shbuf",
+            .vid = PDEV_VID_OKL4,
+            .pid = PDEV_PID_OKL4,
+            .did = PDEV_DID_VS_SHBUF,
             .boot_metadata_list = &metadata,
             .boot_metadata_count = 1,
         };

@@ -120,3 +120,28 @@ typedef struct {
     uint64_t size;
     uint32_t rwx;
 } link_shbuf_info_t;
+
+#define VS_SHBUF_METADATA    (0x12e17900 | BOOTDATA_KIND_METADATA)
+
+typedef struct {
+    uint64_t paddr;
+    uint64_t size;
+    uint32_t rwx;
+    uint32_t notify_bits;
+    uint32_t batch_size;
+} vs_buf_params_t;
+
+typedef struct {
+    // Device info
+    char name[32];
+    // Outgoing virq
+    uint32_t virqline;
+    // Incoming virq
+    uint32_t virq;
+    // Shared memory
+    vs_buf_params_t tx_buf;
+    vs_buf_params_t rx_buf;
+    uint32_t queue_length;
+    uint32_t message_size;
+    bool is_client;
+} vs_shbuf_info_t;

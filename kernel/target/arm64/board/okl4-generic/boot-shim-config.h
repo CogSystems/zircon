@@ -32,6 +32,20 @@
 
 #include <libfdt.h>
 
+#ifndef fdt_for_each_subnode
+#define fdt_for_each_subnode(node, fdt, parent)		\
+	for (node = fdt_first_subnode(fdt, parent);	\
+	     node >= 0;					\
+	     node = fdt_next_subnode(fdt, node))
+#endif
+
+#ifndef fdt_for_each_compatible_node
+#define fdt_for_each_compatible_node(node, fdt, compatible) \
+    for (int node = fdt_node_offset_by_compatible(fdt, -1, compatible); \
+            node >= 0; \
+            node = fdt_node_offset_by_compatible(fdt, node, compatible))
+#endif
+
 #define HAS_DEVICE_TREE 1
 
 /* allow space for two clusters but default to uniprocessor */
@@ -75,6 +89,9 @@ static const zbi_platform_id_t platform_id = {
 
 static int num_link_shbufs;
 static link_shbuf_info_t link_shbuf_info[32];
+
+static int num_vs_shbufs;
+static vs_shbuf_info_t vs_shbuf_info[32];
 
 static struct {
     const char *cmdline;
@@ -121,6 +138,9 @@ static void append_board_boot_item(zbi_header_t* bootdata)
     for (int i = 0; i < num_link_shbufs; i++)
         append_boot_item(bootdata, LINK_SHBUF_METADATA, i,
                 &link_shbuf_info[i], sizeof(link_shbuf_info[i]));
+    for (int i = 0; i < num_vs_shbufs; i++)
+        append_boot_item(bootdata, VS_SHBUF_METADATA, i,
+                &vs_shbuf_info[i], sizeof(vs_shbuf_info[i]));
 
     // add platform ID
     append_boot_item(bootdata, ZBI_TYPE_PLATFORM_ID, 0, &platform_id,
@@ -241,6 +261,14 @@ static void add_link_shbuf(const char *name, uint32_t type, uint64_t address,
     link_shbuf_info[num_link_shbufs].virq = virq;
     link_shbuf_info[num_link_shbufs].rwx = rwx;
     num_link_shbufs++;
+}
+
+static void add_vs_shbuf(vs_shbuf_info_t *info)
+{
+    if (num_vs_shbufs == countof(vs_shbuf_info))
+        fail("too many shared buffers\n");
+    memcpy(&vs_shbuf_info[num_vs_shbufs], info, sizeof(vs_shbuf_info[0]));
+    num_vs_shbufs++;
 }
 
 // Parse the device tree to find our ZBI, kernel command line, and RAM size.
@@ -531,12 +559,8 @@ static void *read_device_tree(void* device_tree)
     int virq_offset;
     const char *label;
 
-    offset = -1;
-    while (1) {
-        offset = fdt_node_offset_by_compatible(device_tree, offset,
-                                               "okl,microvisor-link-shbuf");
-        if (offset < 0)
-            break;
+    fdt_for_each_compatible_node(offset, device_tree,
+                                 "okl,microvisor-link-shbuf") {
         if (!fdt_node_check_compatible(device_tree, offset, "zircon,block"))
             type =  LINK_SHBUF_TYPE_BLOCK;
         else if (!fdt_node_check_compatible(device_tree, offset, "zircon,test"))
@@ -604,6 +628,167 @@ static void *read_device_tree(void* device_tree)
         virqline = fdt32_to_cpu(data32[0]);
 
         add_link_shbuf(label, type, address, size, virqline, virq, rwx);
+    }
+
+    /* virtual service session shared buffer transport */
+    /*
+        shared-buffer@40000 {
+            compatible = "okl,microvisor-shared-memory-transport", "okl,microvisor-shared-memory";
+            phandle = <0x10>;
+            reg = <0x0 0x40000 0x40000 0x0 0x0 0x40000>;
+            label = "client";
+            okl,rwx = <0x6 0x6>;
+
+            virtual-session {
+                compatible = "okl,virtual-session";
+                label = "client";
+                #address-cells = <0x1>;
+                #size-cells = <0x0>;
+                okl,is-client;
+                okl,notify-bits = <0x0 0x1>;
+                interrupts = <0x0 0x4 0x1>;
+                interrupt-parent = <0x3>;
+                okl,interrupt-lines = <0xd>;
+                okl,queue-length = <0x10>;
+                okl,message-size = <0x3ffe>;
+                okl,batch-size = <0x10 0x10>;
+            };
+
+		interrupt-line@16 {
+			compatible = "okl,microvisor-interrupt-line", "okl,microvisor-capability";
+			phandle = <0xd>;
+			reg = <0x16>;
+			label = "linux2_client_out_irq_virqline";
+		};
+    */
+
+    fdt_for_each_compatible_node(offset, device_tree,
+                                 "okl,microvisor-shared-memory-transport") {
+        int vs_offset;
+
+        parent = fdt_parent_offset(device_tree, offset);
+        address_cells = fdt_address_cells(device_tree, parent);
+        size_cells = fdt_address_cells(device_tree, parent);
+
+        fdt_for_each_subnode(vs_offset, device_tree, offset) {
+            if (fdt_node_check_compatible(device_tree, vs_offset,
+                                          "okl,virtual-session"))
+                continue;
+
+            vs_shbuf_info_t info;
+
+            if (fdt_getprop(device_tree, vs_offset, "okl,is-client", NULL))
+                info.is_client = true;
+            else if (fdt_getprop(device_tree, vs_offset, "okl,is-server", NULL))
+                info.is_client = false;
+            else
+                continue;
+            property = fdt_getprop(device_tree, offset, "label", &length);
+            if (!property)
+                continue;
+            strlcpy(info.name, property, sizeof(info.name));
+
+            property = fdt_getprop(device_tree, offset, "reg", &length);
+            if (!property)
+                continue;
+            if (address_cells == 1) {
+                data32 = property;
+                info.tx_buf.paddr = fdt32_to_cpu(data32[0]);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                info.tx_buf.paddr = fdt64_to_cpu(data64[0]);
+                property = &data64[1];
+            }
+            if (size_cells == 2) {
+                data64 = property;
+                info.tx_buf.size = fdt64_to_cpu(data64[0]);
+                property = &data64[1];
+            } else {
+                data32 = property;
+                info.tx_buf.size = fdt32_to_cpu(data32[0]);
+                property = &data32[1];
+            }
+            if (address_cells == 1) {
+                data32 = property;
+                info.rx_buf.paddr = fdt32_to_cpu(data32[0]);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                info.rx_buf.paddr = fdt64_to_cpu(data64[0]);
+                property = &data64[1];
+            }
+            if (size_cells == 2) {
+                data64 = property;
+                info.rx_buf.size = fdt64_to_cpu(data64[0]);
+                property = &data64[1];
+            } else {
+                data32 = property;
+                info.rx_buf.size = fdt32_to_cpu(data32[0]);
+                property = &data32[1];
+            }
+
+            property = fdt_getprop(device_tree, offset, "okl,rwx", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.tx_buf.rwx = fdt32_to_cpu(data32[0]);
+            info.rx_buf.rwx = fdt32_to_cpu(data32[1]);
+
+            property = fdt_getprop(device_tree, vs_offset, "okl,notify-bits", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.tx_buf.notify_bits = fdt32_to_cpu(data32[0]);
+            info.rx_buf.notify_bits = fdt32_to_cpu(data32[1]);
+
+            property = fdt_getprop(device_tree, vs_offset, "okl,queue-length", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.queue_length = fdt32_to_cpu(data32[0]);
+
+            property = fdt_getprop(device_tree, vs_offset, "okl,message-size", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.message_size = fdt32_to_cpu(data32[0]);
+
+            property = fdt_getprop(device_tree, vs_offset, "okl,batch-size", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.tx_buf.batch_size = fdt32_to_cpu(data32[0]);
+            info.rx_buf.batch_size = fdt32_to_cpu(data32[1]);
+
+            property = fdt_getprop(device_tree, vs_offset, "interrupts", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.virq = fdt32_to_cpu(data32[1]) + (fdt32_to_cpu(data32[0]) ? 16 : 32);
+
+            property = fdt_getprop(device_tree, vs_offset, "okl,interrupt-lines",
+                                   &length);
+            if (!property)
+                continue;
+            data32 = property;
+
+            virq_offset = fdt_node_offset_by_phandle(device_tree,
+                                                     fdt32_to_cpu(data32[0]));
+            if (virq_offset < 0)
+                continue;
+            if (fdt_node_check_compatible(device_tree, virq_offset,
+                                          "okl,microvisor-interrupt-line"))
+                continue;
+            property = fdt_getprop(device_tree, virq_offset, "reg", &length);
+            if (!property)
+                continue;
+            data32 = property;
+            info.virqline = fdt32_to_cpu(data32[0]);
+
+            add_vs_shbuf(&info);
+            break;
+        }
     }
 
     // Use the device tree initrd as the ZBI.
