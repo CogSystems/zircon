@@ -103,5 +103,6 @@ DDK_PROTOCOL_DEF(LINK_SHBUF,     'pSHB', "link-shbuf", 0)
 DDK_PROTOCOL_DEF(SHBUF_TEST,     'pSBT', "shbuf-test", 0)
 DDK_PROTOCOL_DEF(VS_SHBUF,       'pVSB', "vs-shbuf", 0)
 DDK_PROTOCOL_DEF(HYP_PIPE,       'pPIP', "hyp-pipe", 0)
+DDK_PROTOCOL_DEF(HYP_VIRQ,       'pVIQ', "hyp-virq", 0)
 #undef DDK_PROTOCOL_DEF
 #endif

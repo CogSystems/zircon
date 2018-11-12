@@ -50,6 +50,7 @@
 #define MAX_LINK_SHBUF  8
 #define MAX_VS_SHBUF    8
 #define MAX_HYP_PIPE    2
+#define MAX_HYP_VIRQ    2
 
 static zx_protocol_device_t okl4_device_protocol = {
     .version = DEVICE_OPS_VERSION,
@@ -135,6 +136,26 @@ static zx_status_t okl4_bind(void* ctx, zx_device_t* parent) {
             .boot_metadata_count = 1,
         };
         status = pbus_device_add(&pbus, &pipe_dev);
+        if (status != ZX_OK) {
+            break;
+        }
+    }
+
+    // hyp virq devices
+    for (uint32_t i = 0; i < MAX_HYP_VIRQ; i++) {
+        pbus_boot_metadata_t metadata = {
+            .zbi_type = HYP_VIRQ_METADATA,
+            .zbi_extra = i,
+        };
+        pbus_dev_t virq_dev = {
+            .name = "hyp-virq",
+            .vid = PDEV_VID_OKL4,
+            .pid = PDEV_PID_OKL4,
+            .did = PDEV_DID_HYP_VIRQ,
+            .boot_metadata_list = &metadata,
+            .boot_metadata_count = 1,
+        };
+        status = pbus_device_add(&pbus, &virq_dev);
         if (status != ZX_OK) {
             break;
         }

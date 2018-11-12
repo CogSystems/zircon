@@ -155,3 +155,11 @@ typedef struct {
     uint32_t tx_kcap;
     uint32_t rx_kcap;
 } link_pipe_info_t;
+
+#define HYP_VIRQ_METADATA     (0x12e17b00 | BOOTDATA_KIND_METADATA)
+
+typedef struct {
+    char name[32];
+    uint32_t virq;
+    uint32_t virqline;
+} hyp_virq_info_t;
