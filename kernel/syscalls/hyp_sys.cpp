@@ -130,8 +130,22 @@ zx_status_t sys_hyp_pipe_send(zx_handle_t rsrc, uint32_t pipe,
         return ZX_ERR_INVALID_ARGS;
     }
 
-    if (!is_user_address_range((vaddr_t)buf, len)) {
-        return ZX_ERR_INVALID_ARGS;
+    // Force map range (taken from sys_vmo_write)
+    {
+        uint8_t byte = 0;
+        auto int_data = user_buf.reinterpret<const uint8_t>();
+        for (size_t i = 0; i < len; i += PAGE_SIZE) {
+            status = int_data.copy_array_from_user(&byte, 1, i);
+            if (status != ZX_OK) {
+                return status;
+            }
+        }
+        if (len > 0) {
+            status = int_data.copy_array_from_user(&byte, 1, len - 1);
+            if (status != ZX_OK) {
+                return status;
+            }
+        }
     }
 
     err = _okl4_sys_pipe_send(pipe, len, buf);
@@ -160,8 +174,22 @@ zx_status_t sys_hyp_pipe_recv(zx_handle_t rsrc, uint32_t pipe,
         return ZX_ERR_INVALID_ARGS;
     }
 
-    if (!is_user_address_range((vaddr_t)buf, len)) {
-        return ZX_ERR_INVALID_ARGS;
+    // Force map range (taken from sys_vmo_read)
+    {
+        uint8_t byte = 0;
+        auto int_data = user_buf.reinterpret<uint8_t>();
+        for (size_t i = 0; i < len; i += PAGE_SIZE) {
+            status = int_data.copy_array_to_user(&byte, 1, i);
+            if (status != ZX_OK) {
+                return status;
+            }
+        }
+        if (len > 0) {
+            status = int_data.copy_array_to_user(&byte, 1, len - 1);
+            if (status != ZX_OK) {
+                return status;
+            }
+        }
     }
 
     ret = _okl4_sys_pipe_recv(pipe, len, buf);
