@@ -96,6 +96,9 @@ static vs_shbuf_info_t vs_shbuf_info[32];
 static int num_link_pipes;
 static link_pipe_info_t link_pipe_info[32];
 
+static int num_hyp_virqs;
+static hyp_virq_info_t hyp_virq_info[8];
+
 static struct {
     const char *cmdline;
     size_t cmdline_length;
@@ -147,6 +150,9 @@ static void append_board_boot_item(zbi_header_t* bootdata)
     for (int i = 0; i < num_vs_shbufs; i++)
         append_boot_item(bootdata, VS_SHBUF_METADATA, i,
                 &vs_shbuf_info[i], sizeof(vs_shbuf_info[i]));
+    for (int i = 0; i < num_hyp_virqs; i++)
+        append_boot_item(bootdata, HYP_VIRQ_METADATA, i,
+                &hyp_virq_info[i], sizeof(hyp_virq_info[i]));
 
     // add platform ID
     append_boot_item(bootdata, ZBI_TYPE_PLATFORM_ID, 0, &platform_id,
@@ -289,6 +295,17 @@ static void add_link_pipe(const char *name, uint32_t tx_irq, uint32_t rx_irq,
     link_pipe_info[num_link_pipes].tx_kcap = tx_kcap;
     link_pipe_info[num_link_pipes].rx_kcap = rx_kcap;
     num_link_pipes++;
+}
+
+static void add_hyp_virq(const char *name, uint32_t virq, uint32_t virqline)
+{
+    if (num_hyp_virqs == countof(hyp_virq_info))
+        fail("too many virqs\n");
+    strlcpy(hyp_virq_info[num_hyp_virqs].name, name,
+            sizeof(hyp_virq_info[num_hyp_virqs].name));
+    hyp_virq_info[num_hyp_virqs].virq = virq;
+    hyp_virq_info[num_hyp_virqs].virqline = virqline;
+    num_hyp_virqs++;
 }
 
 // Parse the device tree to find our ZBI, kernel command line, and RAM size.
@@ -850,6 +867,61 @@ static void *read_device_tree(void* device_tree)
                  + (fdt32_to_cpu(data32[3]) ? 16 : 32);
 
         add_link_pipe(label, tx_irq, rx_irq, tx_kcap, rx_kcap);
+    }
+
+    /* virq variants (virq, virqline, both) */
+    /*
+                virq0@b {
+                        compatible = "okl,user-virq", "okl,microvisor-virq", "okl,microvisor-capability";
+                        phandle = <0xb>;
+                        reg = <0xb>;
+                        label = "virq0";
+                        interrupts = <0x0 0x0 0x1>;
+                };
+
+                virq1@12 {
+                        compatible = "okl,user-virq", "okl,microvisor-interrupt-line", "okl,microvisor-capability";
+                        phandle = <0xa>;
+                        reg = <0x12>;
+                        label = "virq1";
+                };
+
+                virq2@13 {
+                        compatible = "okl,user-virq", "okl,microvisor-interrupt-line", "okl,microvisor-capability";
+                        phandle = <0xa>;
+                        reg = <0x13>;
+                        label = "virq2";
+                        interrupts = <0x0 0x0 0x1>;
+                };
+    */
+    fdt_for_each_compatible_node(offset, device_tree, "okl,user-virq") {
+        uint32_t virq = 0, virqline = 0;
+
+        property = fdt_getprop(device_tree, offset, "label", &length);
+        if (!property)
+            continue;
+        label = property;
+
+        if (!fdt_node_check_compatible(device_tree,
+                    offset, "okl,microvisor-interrupt-line")) {
+            property = fdt_getprop(device_tree, offset, "reg", &length);
+            if (property && length == sizeof(uint32_t)) {
+                data32 = property;
+                virqline = fdt32_to_cpu(data32[0]);
+            }
+        }
+
+        property = fdt_getprop(device_tree, offset, "interrupts", &length);
+        if (property && length == sizeof(uint32_t) * 3) {
+            data32 = property;
+            virq = fdt32_to_cpu(data32[1])
+                   + (fdt32_to_cpu(data32[0]) ? 16 : 32);
+        }
+
+        if (virq == 0 && virqline == 0)
+            continue;
+
+        add_hyp_virq(label, virq, virqline);
     }
 
     // Use the device tree initrd as the ZBI.
