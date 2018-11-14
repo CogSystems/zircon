@@ -12,15 +12,38 @@ BOOT_SHIM_SRCS := \
     $(BOOT_SHIM_DIR)/boot-shim.S \
     $(BOOT_SHIM_DIR)/boot-shim.c \
     $(BOOT_SHIM_DIR)/debug.c \
-    $(BOOT_SHIM_DIR)/devicetree.c \
     $(BOOT_SHIM_DIR)/util.c \
-    $(BOOT_SHIM_DIR)/$(PLATFORM_BOARD_NAME)-uart.c \
+    $(BOOT_SHIM_DIR)/$(PLATFORM_BOARD_NAME)-uart.c
+
+ifeq ($(OKL4_GUEST),true)
+
+BOOT_SHIM_SRCS += \
+    third_party/lib/fdt/fdt.c \
+    third_party/lib/fdt/fdt_addresses.c \
+    third_party/lib/fdt/fdt_empty_tree.c \
+    third_party/lib/fdt/fdt_ro.c \
+    third_party/lib/fdt/fdt_rw.c \
+    third_party/lib/fdt/fdt_strerror.c \
+    third_party/lib/fdt/fdt_sw.c \
+    third_party/lib/fdt/fdt_wip.c \
+    kernel/lib/libc/string/strcat.c \
+    kernel/lib/libc/string/strcpy.c \
+    kernel/lib/libc/string/strlcpy.c \
+    kernel/lib/libc/string/strlen.c
+else
+BOOT_SHIM_SRCS += \
+    $(BOOT_SHIM_DIR)/devicetree.c
+endif
+
+BOOT_SHIM_SRCS += \
     kernel/lib/libc/string/memcpy.c \
     kernel/lib/libc/string/memmove.c \
     kernel/lib/libc/string/memset.c \
+    kernel/lib/libc/string/memchr.c \
+    kernel/lib/libc/string/memcmp.c \
     kernel/lib/libc/string/strcmp.c \
     kernel/lib/libc/string/strncmp.c \
-    system/ulib/libzbi/zbi.c \
+    system/ulib/libzbi/zbi.c
 
 BOOT_SHIM_OBJS := $(BOOT_SHIM_SRCS:%=$(BOOT_SHIM_BUILDDIR)/%.o)
 
@@ -37,6 +60,8 @@ SHIM_INCLUDES := -Ikernel/include -Ikernel/lib/libc/include -Isystem/public
 SHIM_INCLUDES += -Ikernel/arch/arm64/include
 SHIM_INCLUDES += -Isystem/ulib/ddk/include  # for ddk/protocol/platform-defs.h
 SHIM_INCLUDES += -Isystem/ulib/libzbi/include
+SHIM_INCLUDES += -Isystem/ulib/libzbi/include
+SHIM_INCLUDES += -Ithird_party/lib/fdt/include/
 SHIM_CFLAGS := $(NO_SAFESTACK) $(NO_SANITIZERS)
 
 # The shim code runs with alignment checking enabled, so make sure the

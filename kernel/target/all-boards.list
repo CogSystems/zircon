@@ -1,6 +1,7 @@
 [arm64]
 gauss
 hikey960
+okl4-generic
 qemu
 vim2
 imx8mevk

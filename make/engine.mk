@@ -50,6 +50,12 @@ CLANG_TARGET_FUCHSIA ?= false
 USER_USE_LINKER_GC ?= true
 KERNEL_USE_LINKER_GC ?= true
 HOST_USE_ASAN ?= false
+OKL4_GUEST ?= true
+ifeq ($(call TOBOOL,$(OKL4_GUEST)),true)
+OKL4_GUEST = true
+else
+OKL4_GUEST = false
+endif
 
 ifeq ($(call TOBOOL,$(ENABLE_ULIB_ONLY)),true)
 ENABLE_BUILD_SYSROOT := false
@@ -81,6 +87,10 @@ endif
 
 ifeq ($(call TOBOOL,$(DEBUG)),false)
 BUILDDIR_SUFFIX := $(BUILDDIR_SUFFIX)-release
+endif
+
+ifeq ($(OKL4_GUEST),true)
+BUILDDIR_SUFFIX := $(BUILDDIR_SUFFIX)-okl4
 endif
 
 endif   # if BUILDDIR_SUFFIX is empty

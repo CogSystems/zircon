@@ -47,6 +47,7 @@ static void set_cpu_count(uint32_t cpu_count);
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
 
 #if HAS_DEVICE_TREE
+#if !OKL4_GUEST
 typedef enum {
     NODE_NONE,
     NODE_CHOSEN,
@@ -210,6 +211,7 @@ static void append_from_device_tree(zbi_header_t* zbi,
                          ctx->cmdline, ctx->cmdline_length);
     }
 }
+#endif /* !OKL4_GUEST */
 
 #else
 
@@ -260,9 +262,13 @@ boot_shim_return_t boot_shim(void* device_tree) {
 
     zircon_kernel_t* kernel = NULL;
 
+#if OKL4_GUEST
+    zbi_header_t* zbi = read_device_tree(device_tree);
+#else
     // Check the ZBI from device tree.
     device_tree_context_t ctx;
     zbi_header_t* zbi = read_device_tree(device_tree, &ctx);
+#endif
     if (zbi != NULL) {
         zbi_header_t* bad_hdr;
         zbi_result_t check = zbi_check(zbi, &bad_hdr);
@@ -303,7 +309,9 @@ boot_shim_return_t boot_shim(void* device_tree) {
     append_board_boot_item(zbi);
 
     // Append items from device tree.
+#if !OKL4_GUEST
     append_from_device_tree(zbi, &ctx);
+#endif
 
     uint8_t* const kernel_end =
         (uint8_t*)&kernel->data_kernel +
