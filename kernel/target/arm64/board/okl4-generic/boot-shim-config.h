@@ -513,7 +513,7 @@ static void *read_device_tree(void* device_tree)
             uint64_t gicc_address, gicc_size, gicd_address, gicd_size;
             parent = fdt_parent_offset(device_tree, offset);
             address_cells = fdt_address_cells(device_tree, parent);
-            size_cells = fdt_address_cells(device_tree, parent);
+            size_cells = fdt_size_cells(device_tree, parent);
             if (address_cells == 1) {
                 data32 = property;
                 gicd_address = fdt32_to_cpu(*data32);
@@ -562,7 +562,7 @@ static void *read_device_tree(void* device_tree)
              * virtual GICv2 to ensure that it's also true for the virtual
              * GICv2.
              */
-            gicv2_driver.mmio_phys &= ~(uint64_t)0xfffUL;
+            gicv2_driver.mmio_phys &= ~(uint64_t)0xffffUL;
             gicv2_driver.gicd_offset = gicd_address - gicv2_driver.mmio_phys;
             gicv2_driver.gicc_offset = gicc_address - gicv2_driver.mmio_phys;
             add_memory_range(ZBI_MEM_RANGE_PERIPHERAL, gicv2_driver.mmio_phys,
@@ -615,7 +615,7 @@ static void *read_device_tree(void* device_tree)
             continue;
         parent = fdt_parent_offset(device_tree, offset);
         address_cells = fdt_address_cells(device_tree, parent);
-        size_cells = fdt_address_cells(device_tree, parent);
+        size_cells = fdt_size_cells(device_tree, parent);
         if (address_cells == 1) {
             data32 = property;
             address = fdt32_to_cpu(data32[0]);
@@ -705,7 +705,7 @@ static void *read_device_tree(void* device_tree)
 
         parent = fdt_parent_offset(device_tree, offset);
         address_cells = fdt_address_cells(device_tree, parent);
-        size_cells = fdt_address_cells(device_tree, parent);
+        size_cells = fdt_size_cells(device_tree, parent);
 
         fdt_for_each_subnode(vs_offset, device_tree, offset) {
             if (fdt_node_check_compatible(device_tree, vs_offset,
