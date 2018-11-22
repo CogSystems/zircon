@@ -64,16 +64,30 @@ static zbi_cpu_config_t cpu_config = {
 
 static int num_mem_configs;
 static zbi_mem_range_t mem_config[16];
+
 static dcfg_simple_t uart_driver;
+
+static bool gicv2_configured;
 static dcfg_arm_gicv2_driver_t gicv2_driver = {
     .gicd_offset = 0x1000,
     .gicc_offset = 0x2000,
     .ipi_base = 2,
 };
+
+static bool gicv3_configured;
+static dcfg_arm_gicv3_driver_t gicv3_driver = {
+    .gicd_offset = 0x00000,
+    .gicr_offset = 0x60000,
+    .gicr_stride = 0,
+    .ipi_base = 0,
+};
+
 static dcfg_arm_psci_driver_t psci_driver = {
     .use_hvc = true
 };
+
 static dcfg_arm_generic_timer_driver_t timer_driver;
+
 static dcfg_hyp_vtty_driver_t hyp_vtty = {
     .tx_irq = ~0U,
     .rx_irq = ~0U,
@@ -117,8 +131,12 @@ static void append_board_boot_item(zbi_header_t* bootdata)
                      sizeof(zbi_mem_range_t) * num_mem_configs);
 
     // add kernel drivers
-    append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_ARM_GIC_V2,
-                     &gicv2_driver, sizeof(gicv2_driver));
+    if (gicv2_configured)
+        append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_ARM_GIC_V2,
+                         &gicv2_driver, sizeof(gicv2_driver));
+    if (gicv3_configured)
+        append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_ARM_GIC_V3,
+                         &gicv3_driver, sizeof(gicv3_driver));
     if (uart_driver.irq != 0)
         append_boot_item(bootdata, ZBI_TYPE_KERNEL_DRIVER, KDRV_PL011_UART,
                          &uart_driver, sizeof(uart_driver));
@@ -489,7 +507,7 @@ static void *read_device_tree(void* device_tree)
         }
     }
 
-    /* gic */
+    /* gic v2 */
     /*
         interrupt-controller {
             compatible = "okl,hypervisor-vgic", "arm,cortex-a9-gic", "arm,pl390";
@@ -511,6 +529,7 @@ static void *read_device_tree(void* device_tree)
         property = fdt_getprop(device_tree, offset, "reg", &length);
         if (property) {
             uint64_t gicc_address, gicc_size, gicd_address, gicd_size;
+            gicv2_configured = true;
             parent = fdt_parent_offset(device_tree, offset);
             address_cells = fdt_address_cells(device_tree, parent);
             size_cells = fdt_size_cells(device_tree, parent);
@@ -569,7 +588,89 @@ static void *read_device_tree(void* device_tree)
                              0x10000);
         }
     }
-    if (offset < 0 || !property)
+
+    /* gicv3 */
+    /*
+        interrupt-controller {
+            reg = <0x0 0x17a00000 0x0 0x10000       // gicd
+                   0x0 0x17a60000 0x0 0x100000>;    // gicr
+            interrupts = <1 9 4>;
+            redistributor-stride = <0x0 0x20000>;
+            #redistributor-regions = <0x1>;
+
+            gic-its@2c200000 {
+                compatible = "arm,gic-v3-its";
+                msi-controller;
+                #msi-cells = <1>;
+                reg = <0x0 0x2c200000 0 0x20000>;
+            };
+        };
+    */
+    offset = fdt_node_offset_by_compatible(device_tree, -1, "arm,gic-v3");
+    if (offset >= 0) {
+        property = fdt_getprop(device_tree, offset, "reg", &length);
+        if (property) {
+            uint64_t gicd_address, gicd_size, gicr_address, gicr_size;
+            if (gicv2_configured)
+                fail("found both gicv2 and gicv3 in device tree\n");
+            gicv3_configured = true;
+            parent = fdt_parent_offset(device_tree, offset);
+            address_cells = fdt_address_cells(device_tree, parent);
+            size_cells = fdt_size_cells(device_tree, parent);
+            if (address_cells == 1) {
+                data32 = property;
+                gicd_address = fdt32_to_cpu(*data32);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                gicd_address = fdt64_to_cpu(*data64);
+                property = &data64[1];
+            }
+            if (size_cells == 1) {
+                data32 = property;
+                gicd_size = fdt32_to_cpu(*data32);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                gicd_size = fdt64_to_cpu(*data64);
+                property = &data64[1];
+            }
+            if (address_cells == 1) {
+                data32 = property;
+                gicr_address = fdt32_to_cpu(*data32);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                gicr_address = fdt64_to_cpu(*data64);
+                property = &data64[1];
+            }
+            if (size_cells == 1) {
+                data32 = property;
+                gicr_size = fdt32_to_cpu(*data32);
+                property = &data32[1];
+            } else {
+                data64 = property;
+                gicr_size = fdt64_to_cpu(*data64);
+                property = &data64[1];
+            }
+            if (gicd_address < gicr_address)
+                gicv3_driver.mmio_phys = gicd_address;
+            else
+                gicv3_driver.mmio_phys = gicr_address;
+            gicv3_driver.gicd_offset = gicd_address - gicv3_driver.mmio_phys;
+            gicv3_driver.gicr_offset = gicr_address - gicv3_driver.mmio_phys;
+            add_memory_range(ZBI_MEM_RANGE_PERIPHERAL, gicv3_driver.mmio_phys,
+                             0x180000);
+            property = fdt_getprop(device_tree, offset, "redistributor-stride",
+                                   &length);
+            if (property) {
+                data64 = property;
+                gicv3_driver.gicr_stride = fdt64_to_cpu(*data64);
+            }
+        }
+    }
+
+    if (!gicv2_configured && !gicv3_configured)
         fail("gic not found in device tree\n");
 
     /* shared buffers */
