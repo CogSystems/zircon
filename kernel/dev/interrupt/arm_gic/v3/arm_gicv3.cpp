@@ -166,7 +166,9 @@ static zx_status_t gic_init() {
         GICREG(0, GICD_ICENABLER(i / 32)) = ~0;
         GICREG(0, GICD_ICPENDR(i / 32)) = ~0;
         GICREG(0, GICD_IGROUPR(i / 32)) = ~0;
+#if !OKL4_GUEST
         GICREG(0, GICD_IGRPMODR(i / 32)) = 0;
+#endif
     }
     gic_wait_for_rwp(GICD_CTLR);
 
