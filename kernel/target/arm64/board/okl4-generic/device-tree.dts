@@ -1,0 +1,22 @@
+/dts-v1/;
+
+/ {
+	#address-cells = < 0x02 >;
+	#size-cells = < 0x02 >;
+	model = "OKL4 Virtual Platform";
+	compatible = "linux,dummy-virt";
+	interrupt-parent = < 0x01 >;
+
+	interrupt-controller {
+		interrupt-controller;
+		compatible = "okl,hypervisor-vgic";
+		#interrupt-cells = < 0x03 >;
+		interrupt-parent = < 0x01 >;
+		linux,phandle = < 0x01 >;
+		phandle = < 0x01 >;
+	};
+
+	__symbols__ {
+		intc = "/interrupt-controller";
+	};
+};
