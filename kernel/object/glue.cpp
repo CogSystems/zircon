@@ -73,6 +73,12 @@ static void oom_lowmem(size_t shortfall_bytes) {
     }
 }
 
+#if OKL4_GUEST
+#define REDLINE_MB_DEFAULT 4
+#else
+#define REDLINE_MB_DEFAULT 50
+#endif
+
 static void object_glue_init(uint level) TA_NO_THREAD_SAFETY_ANALYSIS {
     Handle::Init();
     root_job = JobDispatcher::CreateRootJob();
@@ -81,7 +87,7 @@ static void object_glue_init(uint level) TA_NO_THREAD_SAFETY_ANALYSIS {
     // Be sure to update kernel_cmdline.md if any of these defaults change.
     oom_init(cmdline_get_bool("kernel.oom.enable", true),
              ZX_SEC(cmdline_get_uint64("kernel.oom.sleep-sec", 1)),
-             cmdline_get_uint64("kernel.oom.redline-mb", 50) * MB,
+             cmdline_get_uint64("kernel.oom.redline-mb", REDLINE_MB_DEFAULT) * MB,
              oom_lowmem);
 }
 
